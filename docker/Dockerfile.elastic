@@ -1,0 +1,27 @@
+FROM docker.elastic.co/elasticsearch/elasticsearch:5.6.5
+
+ARG DOCKER_DIR=docker
+
+USER 0
+
+RUN mkdir -p /usr/share/elasticsearch/config/hunspell && \
+    mkdir -p /usr/share/elasticsearch/config/stop-words && \
+    mkdir -p /usr/share/elasticsearch/config/synonyms 
+    
+COPY ${DOCKER_DIR}/elastic/sk/hunspell /usr/share/elasticsearch/config/hunspell
+COPY ${DOCKER_DIR}/elastic/sk/stop-words /usr/share/elasticsearch/config/stop-words
+COPY ${DOCKER_DIR}/elastic/sk/synonyms /usr/share/elasticsearch/config/synonyms
+
+RUN cd /usr/share/elasticsearch && ls -al plugins/x-pack
+RUN cd /usr/share/elasticsearch && rm -rf plugins/x-pack/* && \
+    bin/elasticsearch-plugin remove x-pack && \
+    rm -rf config/x-pack
+
+COPY --chown=1000:0 ${DOCKER_DIR}/elastic-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+
+# Openshift overrides USER and uses ones with randomly uid>1024 and gid=0
+# Allow ENTRYPOINT (and ES) to run even with a different user
+RUN chgrp 0 /usr/local/bin/docker-entrypoint.sh && \
+    chmod 0775 /usr/local/bin/docker-entrypoint.sh
+
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

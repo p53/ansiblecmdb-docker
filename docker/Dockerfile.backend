@@ -1,0 +1,54 @@
+FROM php:7.1-fpm
+
+ARG ANSIBLECMDB_BACKEND_VERSION
+ARG APP_HOME=/opt/app_ansiblecmdb_backend
+ARG DOCKER_DIR=docker
+ARG APP_USER_UID=1000
+ENV APP_HOME=${APP_HOME}
+
+# needed for composer install
+RUN apt-get update -q -q && \
+    apt-get install -y unzip git zlib1g-dev
+
+# Install application dependencies
+RUN curl --silent --show-error --fail --location \
+      --header "Accept: application/tar+gzip, application/x-gzip, application/octet-stream" -o - \
+      "https://caddyserver.com/download/linux/amd64?plugins=http.expires,http.realip&license=personal" \
+    | tar --no-same-owner -C /usr/bin/ -xz caddy \
+    && chmod 0755 /usr/bin/caddy \
+    && /usr/bin/caddy -version \
+&& docker-php-ext-install mbstring zip
+
+RUN mkdir /var/run/php && \
+    rm /usr/local/etc/php-fpm.d/*
+
+COPY ${DOCKER_DIR}/php-fpm.conf /usr/local/etc/php-fpm.d/php-fpm.conf
+
+RUN mkdir -p $APP_HOME/$ANSIBLECMDB_BACKEND_VERSION && \
+    ln -s $APP_HOME/$ANSIBLECMDB_BACKEND_VERSION $APP_HOME/current
+
+RUN groupadd -g $APP_USER_UID app_user && \
+    useradd -u $APP_USER_UID -g $APP_USER_UID \
+    -s /bin/bash -md $APP_HOME/current app_user
+
+RUN chown -R app_user:app_user $APP_HOME && \
+    chown -R app_user:app_user /var/run/php
+
+RUN curl -sS https://getcomposer.org/installer | php && \
+    mv composer.phar /usr/local/bin/composer
+
+USER root
+
+RUN apt-get purge -y git unzip zlib1g-dev && \
+    apt-get clean
+
+COPY ${DOCKER_DIR}/ansiblecmdb-backend-entry /usr/local/sbin/ansiblecmdb-backend-entry
+RUN chown www-data:www-data /usr/local/sbin/ansiblecmdb-backend-entry
+
+USER app_user
+
+COPY $DOCKER_DIR/Caddyfile /etc/Caddyfile
+
+WORKDIR $APP_HOME
+
+CMD ["/usr/local/sbin/ansiblecmdb-backend-entry"]

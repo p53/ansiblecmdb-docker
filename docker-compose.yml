@@ -1,0 +1,134 @@
+version: '3.2'
+services:
+  elasticsearch_serv:
+    image: elasticsearch:2.4-alpine
+    container_name: ansiblecmdb-elastic-service
+    environment:
+      - cluster.name=ansiblecmdb-cluster
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms8192m -Xmx8192m"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - type: volume
+        source: elasticsearch_data
+        target: /usr/share/elasticsearch/data
+    networks:
+      - ansiblecmdb_net
+    restart: on-failure
+  redis_serv:
+    image: redis:4-alpine
+    container_name: ansiblecmdb-redis-service
+    volumes:
+      - type: volume
+        source: redis_data
+        target: /data
+    networks:
+      - ansiblecmdb_net
+    restart: on-failure
+  kibana_serv:
+    image: ansiblecmdb.kibana:4.6
+    build:
+      context: .
+      dockerfile: ${DOCKER_DIR}/Dockerfile.kibana
+    container_name: ansiblecmdb_kibana 
+    volumes:
+      - type: volume
+        source: kibana_data
+        target: /usr/share/kibana/data
+    depends_on:
+      - elasticsearch_serv
+    networks:
+      - ansiblecmdb_net
+    restart: on-failure
+    ports:
+      - 5601:5601
+  ansiblecmdb_backend_serv:
+     image: ansiblecmdb.backend:${ANSIBLECMDB_BACKEND_VERSION}
+     env_file:
+       - env_file
+     build:
+         context: .
+         dockerfile: ${DOCKER_DIR}/Dockerfile.backend
+         args:
+           ANSIBLECMDB_BACKEND_VERSION: ${ANSIBLECMDB_BACKEND_VERSION}
+           DOCKER_DIR: ${DOCKER_DIR}
+           APP_HOME: ${APP_HOME}
+     container_name: ansiblecmdb_backend
+     volumes:
+       - type: bind
+         source: ${DEV_HOME}/ansiblecmdb-backend 
+         target: ${APP_HOME}/${ANSIBLECMDB_BACKEND_VERSION}
+     depends_on:
+        - elasticsearch_serv
+     networks:
+       - ansiblecmdb_net
+     restart: on-failure
+     ports:
+       - 80:800
+       - 443:4430
+#  ansiblecmdb_frontend_serv:
+#    image: ansiblecmdb.frontend
+#    env_file:
+#      - env_file
+#    build:
+#        context: .
+#        dockerfile: ${DOCKER_DIR}/Dockerfile.frontend
+#        args:
+#          ANSIBLECMDB_FRONTEND_VERSION: ${ANSIBLECMDB_FRONTEND_VERSION}
+#          DOCKER_DIR: ${DOCKER_DIR}
+#    volumes:
+#      - type: bind
+#        source: ${DEV_HOME} 
+#        target: /opt/app_seraph/${ANSIBLECMDB_FRONTEND_VERSION}
+#    depends_on:
+#        - redis_serv
+#        - elasticsearch_serv
+#        - ansiblecmdb_backend_serv
+  phpcron_serv:
+    image: ansiblecmdb.phpcron:${ANSIBLECMDB_BACKEND_VERSION}
+    env_file:
+      - env_file
+    build:
+        context: .
+        dockerfile: ${DOCKER_DIR}/Dockerfile.php
+        args:
+          ANSIBLECMDB_BACKEND_VERSION: ${ANSIBLECMDB_BACKEND_VERSION}
+          DOCKER_DIR: ${DOCKER_DIR}
+          APP_HOME: ${APP_HOME}
+          ANSIBLE_VER: ${ANSIBLE_VER}
+    volumes:
+      - type: bind
+        source: ${DEV_HOME}/ansiblecmdb-backend
+        target: ${APP_HOME}/${ANSIBLECMDB_BACKEND_VERSION}
+      - type: bind
+        source: ${SSH_DIR}
+        target: ${APP_HOME}/.ssh
+    container_name: ansiblecmdb_phpcron
+    depends_on:
+        - redis_serv 
+        - elasticsearch_serv
+        - ansiblecmdb_backend_serv
+    networks:
+      - ansiblecmdb_net
+    restart: on-failure
+
+networks:
+  ansiblecmdb_net:
+    driver: bridge
+    driver_opts:
+      com.docker.network.enable_ipv6: "true"
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.0.0/24
+
+volumes:
+   elasticsearch_data:
+   kibana_data:
+   redis_data:

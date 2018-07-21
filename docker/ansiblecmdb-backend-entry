@@ -1,0 +1,10 @@
+#!/bin/sh
+
+export PATH=/usr/local/bin:/usr/local/sbin:/bin:/sbin:/usr/bin:/usr/sbin:/usr/X11R6/bin
+
+printenv | sed 's/^\(.*\)$/export \1/g' > $APP_HOME/current/.app_env && \
+cd $APP_HOME/current && ls -al && \
+composer install -o --no-interaction && \
+app/console app:index:init  && \
+app/console app:create:user admin admin Admin && \
+/usr/bin/caddy --conf /etc/Caddyfile --log stdout

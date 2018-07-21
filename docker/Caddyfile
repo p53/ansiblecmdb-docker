@@ -1,0 +1,14 @@
+0.0.0.0
+root /opt/app_ansiblecmdb_backend/current/web
+gzip
+fastcgi / unix:/var/run/php/php7.1-fpm.sock php {
+	index app.php
+}
+
+rewrite {
+    to {path} /app.php?{query}
+}
+
+log stdout
+errors stdout
+on startup php-fpm --nodaemonize

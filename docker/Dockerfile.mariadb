@@ -1,0 +1,5 @@
+FROM mariadb:10.0.33
+
+ARG DOCKER_DIR=docker
+
+COPY ${DOCKER_DIR}/seraph.cnf /etc/mysql/conf.d
